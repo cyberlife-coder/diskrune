@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>diskrune</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e1e4e8;min-height:100vh;display:flex;flex-direction:column;}
+.header{background:linear-gradient(135deg,#1a1e2e,#252a3a);padding:20px 28px;border-bottom:1px solid #2d3348;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.header h1{font-size:1.3rem;font-weight:600;color:#58a6ff;white-space:nowrap;}
+.scan-bar{display:flex;gap:8px;flex:1;min-width:300px;}
+.scan-bar input{flex:1;background:#21262d;border:1px solid #30363d;color:#e1e4e8;padding:7px 12px;border-radius:7px;font-size:0.9rem;outline:none;transition:border-color .2s;}
+.scan-bar input:focus{border-color:#58a6ff;}
+.scan-bar button{background:#238636;color:#fff;border:none;padding:7px 18px;border-radius:7px;font-size:0.88rem;cursor:pointer;white-space:nowrap;transition:background .15s;}
+.scan-bar button:hover{background:#2ea043;}
+.scan-bar button:disabled{background:#21262d;color:#484f58;cursor:not-allowed;}
+.btn-pick{background:#1f6feb!important;padding:7px 12px!important;}
+.btn-pick:hover{background:#388bfd!important;}
+.header .stats{display:flex;gap:10px;font-size:0.82rem;color:#8b949e;flex-wrap:wrap;}
+.header .stats span{background:#21262d;padding:3px 10px;border-radius:5px;border:1px solid #30363d;}
+.search-wrap{margin-left:auto;position:relative;}
+.search-wrap input{background:#21262d;border:1px solid #30363d;color:#e1e4e8;padding:7px 12px 7px 32px;border-radius:7px;font-size:0.88rem;width:280px;outline:none;transition:border-color .2s;}
+.search-wrap input:focus{border-color:#58a6ff;}
+.search-wrap::before{content:"🔍";position:absolute;left:9px;top:8px;font-size:.8rem;z-index:2;}
+.search-results{position:absolute;top:100%;left:0;right:0;background:#1c2333;border:1px solid #30363d;border-radius:0 0 8px 8px;max-height:380px;overflow-y:auto;z-index:100;display:none;}
+.search-results.visible{display:block;}
+.sr-item{display:grid;grid-template-columns:1fr 80px;gap:8px;padding:7px 12px;cursor:pointer;font-size:.82rem;border-bottom:1px solid #21262d;transition:background .1s;}
+.sr-item:hover{background:#252d3d;}
+.sr-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c9d1d9;}
+.sr-size{text-align:right;color:#8b949e;font-family:monospace;font-size:.78rem;}
+.sr-count{padding:5px 12px;font-size:.76rem;color:#6e7681;border-bottom:1px solid #21262d;}
+.status-bar{padding:10px 28px;background:#161b22;border-bottom:1px solid #21262d;font-size:.82rem;color:#8b949e;display:none;}
+.status-bar.visible{display:block;}
+.breadcrumb{padding:7px 28px;background:#0d1117;border-bottom:1px solid #21262d;font-size:.8rem;color:#6e7681;display:none;flex-wrap:wrap;gap:4px;align-items:center;}
+.breadcrumb.visible{display:flex;}
+.bc-item{color:#58a6ff;cursor:pointer;padding:2px 6px;border-radius:4px;transition:background .1s;}
+.bc-item:hover{background:#21262d;}
+.bc-sep{color:#484f58;}
+.container{max-width:1400px;width:100%;margin:0 auto;padding:16px 24px;flex:1;}
+.summary-panel{background:#161b22;border:1px solid #30363d;border-radius:9px;padding:18px;margin-bottom:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;}
+.summary-card{text-align:center;}
+.summary-card .val{font-size:1.5rem;font-weight:700;color:#58a6ff;font-family:monospace;}
+.summary-card .lbl{font-size:.76rem;color:#6e7681;margin-top:3px;}
+.top-list{background:#161b22;border:1px solid #30363d;border-radius:9px;padding:18px;margin-bottom:14px;}
+.top-list h3{font-size:.9rem;color:#58a6ff;margin-bottom:10px;}
+.top-item{display:grid;grid-template-columns:1fr 90px 140px 46px;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #21262d;font-size:.82rem;cursor:pointer;}
+.top-item:hover{background:#1c2333;}
+.top-item:last-child{border-bottom:none;}
+.top-item .tp{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c9d1d9;}
+.top-item .ts{text-align:right;color:#8b949e;font-family:monospace;}
+.bar-c{height:7px;background:#21262d;border-radius:3px;overflow:hidden;}
+.bar-f{height:100%;border-radius:3px;transition:width .3s ease;min-width:1px;}
+.pct{text-align:right;font-size:.78rem;color:#6e7681;font-family:monospace;}
+.tree-node .children{margin-left:22px;border-left:1px solid #21262d;display:none;}
+.tree-node.expanded>.children{display:block;}
+.node-row{display:grid;grid-template-columns:22px 1fr 100px 180px 50px 28px;align-items:center;gap:8px;padding:4px 9px;border-radius:5px;cursor:pointer;transition:background .1s;font-size:.86rem;}
+.node-row:hover{background:#1c2333;}
+.node-row.selected{background:#1c2333;border:1px solid #30363d;}
+.node-row .tgl{color:#484f58;font-size:.68rem;transition:transform .15s;display:inline-block;width:14px;text-align:center;user-select:none;}
+.tree-node.expanded>.node-row .tgl{transform:rotate(90deg);}
+.node-row .nm{display:flex;align-items:center;gap:7px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.node-row .nm .ico{font-size:.95rem;flex-shrink:0;}
+.node-row .nm .lbl{overflow:hidden;text-overflow:ellipsis;}
+.node-row .sz{text-align:right;font-family:monospace;font-size:.8rem;color:#8b949e;white-space:nowrap;}
+.file-row .nm .lbl{color:#8b949e;}
+.err-badge{font-size:.68rem;background:#da363333;color:#f85149;padding:1px 5px;border-radius:3px;margin-left:5px;}
+/* drill-down button — only visible on dir row hover */
+.drill-btn{opacity:0;background:#1f6feb;border:none;color:#fff;border-radius:4px;font-size:.7rem;padding:2px 6px;cursor:pointer;white-space:nowrap;transition:opacity .15s;height:20px;}
+.node-row:hover .drill-btn{opacity:1;}
+.drill-btn:hover{background:#388bfd!important;}
+.welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:#484f58;text-align:center;gap:12px;}
+.welcome h2{font-size:1.1rem;color:#6e7681;}
+.welcome p{font-size:.85rem;}
+.tip{font-size:.75rem;color:#484f58;margin-top:4px;}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🪨 diskrune</h1>
+  <div class="scan-bar">
+    <input type="text" id="scan-path" placeholder="C:\  or  D:\Projects" value="C:\"/>
+    <button id="btn-scan">Scan</button>
+    <button id="btn-pick" class="btn-pick" title="Browse for a folder…">📂</button>
+  </div>
+  <div class="stats" id="stats" style="display:none">
+    <span id="stat-total"></span>
+    <span id="stat-dirs"></span>
+    <span id="stat-files"></span>
+    <span id="stat-time"></span>
+  </div>
+  <div class="search-wrap" id="search-wrap" style="display:none">
+    <input type="text" id="search" placeholder="Search…" autocomplete="off"/>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+<div class="status-bar" id="status-bar"></div>
+<div class="breadcrumb" id="breadcrumb"></div>
+<div class="container">
+  <div id="welcome" class="welcome">
+    <h2>Enter a path and click Scan</h2>
+    <p>diskrune scans your disk in parallel and renders an interactive tree view.</p>
+    <p class="tip">Tip: click 📂 to browse, or use the ⤵ button on any folder to drill down.</p>
+  </div>
+  <div id="report" style="display:none">
+    <div class="summary-panel" id="summary"></div>
+    <div class="top-list"   id="top-dirs"></div>
+    <div id="tree-root"></div>
+  </div>
+</div>
+
+<script>
+// ── Tauri API — initialised after DOM ready to avoid TDZ errors ───────────────
+let invoke, listen, openDialog;
+var allDirs  = [];
+var scanHistory = [];   // breadcrumb stack
+
+document.addEventListener('DOMContentLoaded', () => {
+  // withGlobalTauri:true ensures window.__TAURI__ exists
+  const T = window.__TAURI__;
+  invoke     = T.core.invoke;
+  listen     = T.event.listen;
+  openDialog = T.dialog.open;
+
+  // Wire buttons now that API is ready
+  document.getElementById('btn-scan').addEventListener('click', startScan);
+  document.getElementById('btn-pick').addEventListener('click', pickFolder);
+  document.getElementById('scan-path').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startScan();
+  });
+
+  // Tauri event listeners
+  listen('scan:start', ({ payload }) => setStatus('Scanning ' + payload.path + '…'));
+  listen('scan:complete', ({ payload }) => {
+    setScanning(false);
+    setStatus('');
+    renderReport(payload.data, payload.elapsed_ms);
+  });
+
+  // Search
+  document.getElementById('search').addEventListener('input', onSearch);
+  document.getElementById('search-results').addEventListener('click', onSearchClick);
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.search-wrap'))
+      document.getElementById('search-results').classList.remove('visible');
+  });
+});
+
+// ── Scan ──────────────────────────────────────────────────────────────────────
+async function startScan(path) {
+  path = (typeof path === 'string') ? path : document.getElementById('scan-path').value.trim();
+  if (!path) return;
+  document.getElementById('scan-path').value = path;
+  setScanning(true);
+  try {
+    await invoke('start_scan', { path });
+  } catch (e) {
+    setStatus('Error: ' + e);
+    setScanning(false);
+  }
+}
+
+async function pickFolder() {
+  const selected = await openDialog({ directory: true, multiple: false });
+  if (selected) startScan(selected);
+}
+
+function drillInto(path) {
+  // Push current path onto breadcrumb stack
+  const cur = document.getElementById('scan-path').value.trim();
+  if (cur && (scanHistory.length === 0 || scanHistory[scanHistory.length - 1] !== cur)) {
+    scanHistory.push(cur);
+  }
+  startScan(path);
+  updateBreadcrumb(path);
+}
+
+function updateBreadcrumb(currentPath) {
+  const el = document.getElementById('breadcrumb');
+  if (!scanHistory.length) { el.classList.remove('visible'); return; }
+  el.classList.add('visible');
+  const items = scanHistory.map((p, i) => {
+    const label = p.replace(/.*[\\\/]/, '') || p;
+    return `<span class="bc-item" data-idx="${i}" title="${p}">📁 ${label}</span>`;
+  }).join('<span class="bc-sep"> › </span>');
+  el.innerHTML = items + `<span class="bc-sep"> › </span><span style="color:#c9d1d9">${currentPath.replace(/.*[\\\/]/, '') || currentPath}</span>`;
+  el.querySelectorAll('.bc-item').forEach(bc => {
+    bc.addEventListener('click', () => {
+      const idx = +bc.dataset.idx;
+      const target = scanHistory[idx];
+      scanHistory = scanHistory.slice(0, idx);
+      startScan(target);
+      updateBreadcrumb(target);
+    });
+  });
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderReport(data, elapsedMs) {
+  document.getElementById('welcome').style.display = 'none';
+  document.getElementById('report').style.display  = 'block';
+  document.getElementById('stats').style.display   = 'flex';
+  document.getElementById('search-wrap').style.display = 'block';
+  allDirs = flattenDirs(data);
+  renderSummary(data, elapsedMs);
+  renderTopDirs(data);
+  renderTree(data);
+}
+
+function flattenDirs(node, out) {
+  out = out || [];
+  if (node.is_dir && node.path) out.push(node);
+  if (node.children) node.children.forEach(c => flattenDirs(c, out));
+  return out;
+}
+
+function renderSummary(node, elapsedMs) {
+  document.getElementById('stat-total').textContent = '💾 ' + hs(node.size);
+  document.getElementById('stat-dirs' ).textContent = '📁 ' + (node.dir_count  || 0).toLocaleString() + ' dirs';
+  document.getElementById('stat-files').textContent = '📄 ' + (node.file_count || 0).toLocaleString() + ' files';
+  document.getElementById('stat-time' ).textContent = '⏱ ' + (elapsedMs / 1000).toFixed(1) + 's';
+  const dirs = (node.children || []).filter(c => c.is_dir).slice(0, 8);
+  document.getElementById('summary').innerHTML = dirs.map(c =>
+    `<div class="summary-card"><div class="val">${hs(c.size)}</div><div class="lbl">${c.name} (${pct(c.size, node.size)}%)</div></div>`
+  ).join('');
+}
+
+function renderTopDirs(root) {
+  const all = flattenDirs(root).sort((a, b) => b.size - a.size).slice(0, 15);
+  document.getElementById('top-dirs').innerHTML =
+    '<h3>🏆 Top 15 — Biggest directories</h3>' +
+    all.map(d => {
+      const p = pct(d.size, root.size);
+      const esc = d.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return `<div class="top-item" onclick="goTo('${esc}')">
+        <div class="tp" title="${d.path}">📁 ${d.path}</div>
+        <div class="ts">${hs(d.size)}</div>
+        <div class="bar-c"><div class="bar-f" style="width:${p}%;background:${bc(+p)}"></div></div>
+        <div class="pct">${p}%</div>
+      </div>`;
+    }).join('');
+}
+
+function renderTree(root) {
+  const c = document.getElementById('tree-root');
+  c.innerHTML = '';
+  const nodes = root.children && root.children.length ? root.children : [root];
+  nodes.forEach(n => {
+    const el = makeNode(n, root.size);
+    el.classList.add('expanded');
+    const cd = el.querySelector('.children');
+    if (cd && n.children) {
+      const frag = document.createDocumentFragment();
+      n.children.forEach(ch => frag.appendChild(makeNode(ch, n.size)));
+      cd.appendChild(frag);
+      cd.style.display = 'block';
+    }
+    c.appendChild(el);
+  });
+}
+
+function makeNode(node, parentSize) {
+  const div = document.createElement('div');
+  div.className = 'tree-node' + (node.is_dir ? '' : ' file-node');
+  div.dataset.path = node.path || '';
+
+  const p = +pct(node.size, parentSize);
+  const row = document.createElement('div');
+  row.className = 'node-row' + (node.is_dir ? '' : ' file-row');
+  const hasKids = node.is_dir && node.children && node.children.length;
+
+  // Drill-down button (dirs only)
+  const drillHtml = node.is_dir
+    ? `<button class="drill-btn" title="Scan this folder">⤵</button>`
+    : `<span></span>`;
+
+  row.innerHTML =
+    `<span class="tgl">${hasKids ? '▶' : ''}</span>` +
+    `<span class="nm"><span class="ico">${icon(node)}</span><span class="lbl">${node.name}</span>` +
+    (node.error ? `<span class="err-badge">${node.error}</span>` : '') +
+    `</span><span class="sz">${hs(node.size)}</span>` +
+    `<div class="bar-c"><div class="bar-f" style="width:${p}%;background:${bc(p)}"></div></div>` +
+    `<span class="pct">${p}%</span>` +
+    drillHtml;
+
+  div.appendChild(row);
+
+  // Drill-down button click
+  if (node.is_dir && node.path) {
+    const btn = row.querySelector('.drill-btn');
+    if (btn) btn.addEventListener('click', e => { e.stopPropagation(); drillInto(node.path); });
+  }
+
+  if (hasKids) {
+    const cd = document.createElement('div');
+    cd.className = 'children';
+    div.appendChild(cd);
+    let rendered = false;
+    row.addEventListener('click', e => {
+      if (e.target.classList.contains('drill-btn')) return;
+      e.stopPropagation();
+      div.classList.toggle('expanded');
+      if (!rendered) {
+        rendered = true;
+        const frag = document.createDocumentFragment();
+        node.children.forEach(ch => frag.appendChild(makeNode(ch, node.size)));
+        cd.appendChild(frag);
+      }
+    });
+  }
+  return div;
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+function onSearch() {
+  const q = this.value.trim().toLowerCase();
+  const el = document.getElementById('search-results');
+  if (!q) { el.classList.remove('visible'); return; }
+  const matches = allDirs.filter(d =>
+    d.name.toLowerCase().includes(q) || (d.path && d.path.toLowerCase().includes(q))
+  ).slice(0, 20);
+  if (!matches.length) { el.classList.remove('visible'); return; }
+  el.innerHTML = `<div class="sr-count">${matches.length} result(s)</div>` +
+    matches.map(m => `<div class="sr-item" data-path="${m.path}">
+      <span class="sr-path">📁 ${m.path}</span>
+      <span class="sr-size">${hs(m.size)}</span>
+    </div>`).join('');
+  el.classList.add('visible');
+}
+
+function onSearchClick(e) {
+  const item = e.target.closest('.sr-item');
+  if (!item) return;
+  goTo(item.dataset.path);
+  document.getElementById('search-results').classList.remove('visible');
+  document.getElementById('search').value = '';
+}
+
+// ── Navigate ──────────────────────────────────────────────────────────────────
+function goTo(targetPath) {
+  const nt = targetPath.replace(/\\/g, '/').toLowerCase();
+  const parts = targetPath.split(/[\\\/]/);
+  let cur = '';
+  parts.forEach(p => {
+    if (!p) return;
+    cur += (cur && !cur.endsWith('\\') ? '\\' : '') + p;
+    const norm = cur.replace(/\\/g, '/').toLowerCase();
+    document.querySelectorAll('.tree-node').forEach(el => {
+      if ((el.dataset.path || '').replace(/\\/g, '/').toLowerCase() === norm && !el.classList.contains('expanded'))
+        el.querySelector(':scope > .node-row')?.click();
+    });
+  });
+  document.querySelectorAll('.tree-node').forEach(el => {
+    if ((el.dataset.path || '').replace(/\\/g, '/').toLowerCase() === nt) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const r = el.querySelector(':scope > .node-row');
+      if (r) { r.classList.add('selected'); setTimeout(() => r.classList.remove('selected'), 3000); }
+    }
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function hs(b) {
+  if (b >= 1e12) return (b/1e12).toFixed(1)+' TB';
+  if (b >= 1e9)  return (b/1e9 ).toFixed(1)+' GB';
+  if (b >= 1e6)  return (b/1e6 ).toFixed(1)+' MB';
+  if (b >= 1e3)  return (b/1e3 ).toFixed(1)+' KB';
+  return b+' B';
+}
+function pct(p, t) { return t ? (p/t*100).toFixed(1) : '0.0'; }
+function bc(p) { return p>=50?'#da3633':p>=25?'#d29922':p>=10?'#388bfd':'#3fb950'; }
+function icon(n) {
+  if (!n.is_dir) return '📄';
+  const nm = n.name.toLowerCase();
+  if (nm==='node_modules') return '📦';
+  if (nm==='target'||nm==='.cargo') return '🦀';
+  if (nm==='.git') return '🔧';
+  if (nm.includes('download')) return '⬇️';
+  if (nm.includes('video')) return '🎬';
+  if (nm.includes('document')) return '📝';
+  if (nm.includes('temp')||nm.includes('cache')) return '🗑️';
+  return '📁';
+}
+function setScanning(on) {
+  document.getElementById('btn-scan').disabled = on;
+  document.getElementById('btn-scan').textContent = on ? 'Scanning…' : 'Scan';
+}
+function setStatus(msg) {
+  const el = document.getElementById('status-bar');
+  el.textContent = msg;
+  el.classList.toggle('visible', !!msg);
+}
+</script>
+</body>
+</html>

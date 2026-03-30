@@ -1,0 +1,8 @@
+target/
+.tauri/
+node_modules/
+dist/
+gen/
+*.iml
+.idea/
+.vscode/

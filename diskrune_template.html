@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>diskrune &mdash; Disk Usage Analyzer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0f1117; color: #e1e4e8; min-height: 100vh; }
+.header { background: linear-gradient(135deg, #1a1e2e 0%, #252a3a 100%); padding: 24px 32px; border-bottom: 1px solid #2d3348; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.header h1 { font-size: 1.5rem; font-weight: 600; color: #58a6ff; display: flex; align-items: center; gap: 10px; }
+.header .stats { display: flex; gap: 20px; font-size: 0.85rem; color: #8b949e; }
+.header .stats span { background: #21262d; padding: 4px 12px; border-radius: 6px; border: 1px solid #30363d; }
+.search-wrapper { margin-left: auto; position: relative; }
+.search-wrapper input { background: #21262d; border: 1px solid #30363d; color: #e1e4e8; padding: 8px 14px 8px 36px; border-radius: 8px; font-size: 0.9rem; width: 320px; outline: none; transition: border-color 0.2s; }
+.search-wrapper input:focus { border-color: #58a6ff; }
+.search-wrapper::before { content: "\uD83D\uDD0D"; position: absolute; left: 10px; top: 10px; font-size: 0.85rem; z-index: 2; }
+.search-results { position: absolute; top: 100%; left: 0; right: 0; background: #1c2333; border: 1px solid #30363d; border-radius: 0 0 8px 8px; max-height: 400px; overflow-y: auto; z-index: 100; display: none; }
+.search-results.visible { display: block; }
+.search-result-item { display: grid; grid-template-columns: 1fr 90px; gap: 8px; padding: 8px 14px; cursor: pointer; font-size: 0.84rem; border-bottom: 1px solid #21262d; transition: background 0.1s; }
+.search-result-item:hover { background: #252d3d; }
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item .sr-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9d1d9; }
+.search-result-item .sr-size { text-align: right; color: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
+.search-result-count { padding: 6px 14px; font-size: 0.78rem; color: #6e7681; border-bottom: 1px solid #21262d; }
+.container { max-width: 1400px; margin: 0 auto; padding: 16px 24px; }
+.tree-node .children { margin-left: 24px; border-left: 1px solid #21262d; display: none; }
+.tree-node.expanded > .children { display: block; }
+.node-row { display: grid; grid-template-columns: 24px 1fr 110px 200px 55px; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 6px; cursor: pointer; transition: background 0.12s; font-size: 0.88rem; }
+.node-row:hover { background: #1c2333; }
+.node-row.selected { background: #1c2333; border: 1px solid #30363d; }
+.node-row .toggle { color: #484f58; font-size: 0.7rem; transition: transform 0.15s; display: inline-block; width: 16px; text-align: center; user-select: none; }
+.tree-node.expanded > .node-row .toggle { transform: rotate(90deg); }
+.node-row .name { display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.node-row .name .icon { font-size: 1rem; flex-shrink: 0; }
+.node-row .name .label { overflow: hidden; text-overflow: ellipsis; }
+.node-row .size { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #8b949e; white-space: nowrap; }
+.bar-container { height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; min-width: 1px; }
+.pct { text-align: right; font-size: 0.8rem; color: #6e7681; font-family: 'JetBrains Mono', monospace; }
+.file-row .name .label { color: #8b949e; }
+.error-badge { font-size: 0.7rem; background: #da363333; color: #f85149; padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
+.summary-panel { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; margin-bottom: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+.summary-card { text-align: center; }
+.summary-card .value { font-size: 1.6rem; font-weight: 700; color: #58a6ff; font-family: 'JetBrains Mono', monospace; }
+.summary-card .label { font-size: 0.78rem; color: #6e7681; margin-top: 4px; }
+.top-list { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+.top-list h3 { font-size: 0.95rem; color: #58a6ff; margin-bottom: 12px; }
+.top-item { display: grid; grid-template-columns: 1fr 100px 150px 50px; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #21262d; font-size: 0.85rem; cursor: pointer; }
+.top-item:hover { background: #1c2333; }
+.top-item:last-child { border-bottom: none; }
+.top-item .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9d1d9; }
+.top-item .size { text-align: right; color: #8b949e; font-family: monospace; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>&#x1FAA8; diskrune &mdash; Disk Usage Analyzer</h1>
+  <div class="stats">
+    <span id="stat-total"></span>
+    <span id="stat-dirs"></span>
+    <span id="stat-files"></span>
+  </div>
+  <div class="search-wrapper">
+    <input type="text" id="search" placeholder="Search a folder..." autocomplete="off" />
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+<div class="container">
+  <div class="summary-panel" id="summary"></div>
+  <div class="top-list" id="top-dirs"></div>
+  <div id="tree-root"></div>
+</div>
+<script>
+// Replace DATA below with output from scan_disk.ps1
+var DATA = {"name":"Drives","size":536870912000,"dir_count":1842,"file_count":18654,"is_dir":true,"path":"","children":[{"name":"C:","size":536870912000,"dir_count":1842,"file_count":18654,"is_dir":true,"path":"C:","children":[{"name":"Users","size":214748364800,"dir_count":620,"file_count":9200,"is_dir":true,"path":"C:\\Users","children":[{"name":"YourName","size":193273528320,"dir_count":580,"file_count":8900,"is_dir":true,"path":"C:\\Users\\YourName","children":[{"name":"AppData","size":85899345920,"dir_count":400,"file_count":6200,"is_dir":true,"path":"C:\\Users\\YourName\\AppData","children":[]},{"name":"Documents","size":53687091200,"dir_count":120,"file_count":1500,"is_dir":true,"path":"C:\\Users\\YourName\\Documents","children":[]},{"name":"Downloads","size":42949672960,"dir_count":30,"file_count":980,"is_dir":true,"path":"C:\\Users\\YourName\\Downloads","children":[]},{"name":"Videos","size":10737418240,"dir_count":20,"file_count":120,"is_dir":true,"path":"C:\\Users\\YourName\\Videos","children":[]}]}]},{"name":"Windows","size":214748364800,"dir_count":740,"file_count":3640,"is_dir":true,"path":"C:\\Windows","children":[{"name":"System32","size":107374182400,"dir_count":200,"file_count":2100,"is_dir":true,"path":"C:\\Windows\\System32","children":[]},{"name":"WinSxS","size":85899345920,"dir_count":500,"file_count":1400,"is_dir":true,"path":"C:\\Windows\\WinSxS","children":[]}]},{"name":"Program Files","size":107374182400,"dir_count":480,"file_count":5800,"is_dir":true,"path":"C:\\Program Files","children":[{"name":"Microsoft Office","size":42949672960,"dir_count":80,"file_count":1200,"is_dir":true,"path":"C:\\Program Files\\Microsoft Office","children":[]}]}]}]};
+
+function humanSize(b){if(b>=1e12)return(b/1e12).toFixed(1)+' TB';if(b>=1e9)return(b/1e9).toFixed(1)+' GB';if(b>=1e6)return(b/1e6).toFixed(1)+' MB';if(b>=1e3)return(b/1e3).toFixed(1)+' KB';return b+' B';}
+function pctOf(p,t){if(!t)return'0.0';return(p/t*100).toFixed(1);}
+function barColor(p){if(p>=50)return'#da3633';if(p>=25)return'#d29922';if(p>=10)return'#388bfd';return'#3fb950';}
+function dirIcon(n){if(!n.is_dir)return'📄';var nm=n.name.toLowerCase();if(nm==='node_modules')return'📦';if(nm==='target'||nm==='.cargo')return'🦀';if(nm==='.git')return'🔧';if(nm.includes('download'))return'⬇️';if(nm.includes('video'))return'🎬';if(nm.includes('document'))return'📝';if(nm.includes('temp')||nm.includes('cache'))return'🗑️';return'📁';}
+
+function flattenAll(n,o){o=o||[];if(n.is_dir&&n.path)o.push(n);if(n.children)for(var i=0;i<n.children.length;i++)flattenAll(n.children[i],o);return o;}
+var allDirs=flattenAll(DATA);
+var searchInput=document.getElementById('search');
+var searchResultsEl=document.getElementById('search-results');
+searchInput.addEventListener('input',function(){var q=this.value.trim().toLowerCase();if(!q){searchResultsEl.classList.remove('visible');return;}var m=allDirs.filter(function(d){return d.name.toLowerCase().includes(q)||(d.path&&d.path.toLowerCase().includes(q));}).slice(0,20);if(!m.length){searchResultsEl.classList.remove('visible');return;}var h='<div class="search-result-count">'+m.length+' result(s)</div>';for(var i=0;i<m.length;i++){var x=m[i];h+='<div class="search-result-item" data-path="'+x.path+'"><span class="sr-path">📁 '+x.path+'</span><span class="sr-size">'+humanSize(x.size)+'</span></div>';}searchResultsEl.innerHTML=h;searchResultsEl.classList.add('visible');},200);
+searchResultsEl.addEventListener('click',function(e){var item=e.target.closest('.search-result-item');if(!item)return;navigateToPath(item.getAttribute('data-path'));searchResultsEl.classList.remove('visible');searchInput.value='';});
+document.addEventListener('click',function(e){if(!e.target.closest('.search-wrapper'))searchResultsEl.classList.remove('visible');});
+
+function findTopDirs(n,r,m,d){r=r||[];m=m||1;d=d||0;if(n.is_dir&&n.children&&d>=m)r.push(n);if(n.children)for(var i=0;i<n.children.length;i++){if(n.children[i].is_dir)findTopDirs(n.children[i],r,m,d+1);}return r;}
+function renderTopDirs(root){var all=findTopDirs(root);all.sort(function(a,b){return b.size-a.size;});var top=all.slice(0,15);var c=document.getElementById('top-dirs');var t=root.size;var h='<h3>🏆 Top 15 — Biggest space consumers</h3>';for(var i=0;i<top.length;i++){var d=top[i];var p=pctOf(d.size,t);var e=d.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");h+='<div class="top-item" onclick="navigateToPath(\''+e+'\')"><div class="path" title="'+d.path+'">📁 '+d.path+'</div><div class="size">'+humanSize(d.size)+'</div><div class="bar-container"><div class="bar-fill" style="width:'+p+'%;background:'+barColor(parseFloat(p))+'"></div></div><div class="pct">'+p+'%</div></div>';}c.innerHTML=h;}
+function renderSummary(n){document.getElementById('stat-total').textContent='💾 '+humanSize(n.size);document.getElementById('stat-dirs').textContent='📁 '+(n.dir_count||0).toLocaleString()+' folders';document.getElementById('stat-files').textContent='📄 '+(n.file_count||0).toLocaleString()+' files';var ch=n.children||[];var s=document.getElementById('summary');var h='';var dirs=ch.filter(function(c){return c.is_dir;}).slice(0,8);for(var i=0;i<dirs.length;i++){var c=dirs[i];h+='<div class="summary-card"><div class="value">'+humanSize(c.size)+'</div><div class="label">'+c.name+' ('+pctOf(c.size,n.size)+'%)</div></div>';}s.innerHTML=h;}
+function createNodeEl(n,ps){var div=document.createElement('div');div.className='tree-node'+(n.is_dir?'':' file-node');div.dataset.path=n.path||'';var pct=parseFloat(pctOf(n.size,ps));var row=document.createElement('div');row.className='node-row'+(n.is_dir?'':' file-row');var hc=n.is_dir&&n.children&&n.children.length;row.innerHTML='<span class="toggle">'+(hc?'▶':'')+'</span><span class="name"><span class="icon">'+dirIcon(n)+'</span><span class="label">'+n.name+'</span>'+(n.error?'<span class="error-badge">'+n.error+'</span>':'')+'</span><span class="size">'+humanSize(n.size)+'</span><div class="bar-container"><div class="bar-fill" style="width:'+pct+'%;background:'+barColor(pct)+'"></div></div><span class="pct">'+pct+'%</span>';div.appendChild(row);if(hc){var cd=document.createElement('div');cd.className='children';div.appendChild(cd);var cr=false;row.addEventListener('click',function(e){e.stopPropagation();div.classList.toggle('expanded');if(!cr){cr=true;var f=document.createDocumentFragment();for(var i=0;i<n.children.length;i++)f.appendChild(createNodeEl(n.children[i],n.size));cd.appendChild(f);}});}return div;}
+function renderTree(root){var c=document.getElementById('tree-root');c.innerHTML='';var nodes=root.children&&root.children.length?root.children:[root];for(var i=0;i<nodes.length;i++){var n=nodes[i];var el=createNodeEl(n,root.size);el.classList.add('expanded');var cd=el.querySelector('.children');if(cd&&n.children){var f=document.createDocumentFragment();for(var j=0;j<n.children.length;j++)f.appendChild(createNodeEl(n.children[j],n.size));cd.appendChild(f);cd.style.display='block';}c.appendChild(el);}}
+function navigateToPath(tp){var nt=tp.replace(/\\/g,'/').toLowerCase();var parts=tp.split(/[\\\/]/);var pe=[];var cur='';for(var i=0;i<parts.length;i++){if(!parts[i])continue;cur+=(cur&&!cur.endsWith('\\')&&!cur.endsWith('/')?'\\':'')+parts[i];pe.push(cur);}for(var j=0;j<pe.length;j++){var nm=pe[j].replace(/\\/g,'/').toLowerCase();var dn=document.querySelectorAll('.tree-node');for(var k=0;k<dn.length;k++){var dp=(dn[k].dataset.path||'').replace(/\\/g,'/').toLowerCase();if(dp===nm&&!dn[k].classList.contains('expanded')){var r=dn[k].querySelector(':scope > .node-row');if(r)r.click();break;}}}var an=document.querySelectorAll('.tree-node');for(var m=0;m<an.length;m++){var np=(an[m].dataset.path||'').replace(/\\/g,'/').toLowerCase();if(np===nt){an[m].scrollIntoView({behavior:'smooth',block:'center'});var nr=an[m].querySelector(':scope > .node-row');if(nr){nr.classList.add('selected');setTimeout(function(r){return function(){r.classList.remove('selected');};}(nr),3000);}return;}}}
+window.addEventListener('DOMContentLoaded',function(){renderSummary(DATA);renderTopDirs(DATA);renderTree(DATA);});
+</script>
+</body>
+</html>
