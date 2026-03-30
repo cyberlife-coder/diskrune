@@ -9,7 +9,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::start_scan,
-            commands::open_path
+            commands::open_path,
+            commands::list_drives,
         ])
         .run(tauri::generate_context!())
         .expect("diskrune failed to start");

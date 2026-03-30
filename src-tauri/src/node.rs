@@ -74,6 +74,23 @@ pub fn sort_by_size_desc(nodes: &mut Vec<DirNode>) {
     nodes.sort_unstable_by(|a, b| b.size.cmp(&a.size));
 }
 
+/// Trims the tree to `max_depth` levels so that IPC serialization stays
+/// bounded.  Nodes at the cut-off keep their aggregated stats (size /
+/// dir_count / file_count) so the UI still shows accurate numbers, but
+/// their children are cleared.  The frontend can drill in on demand by
+/// calling `start_scan` on that path.
+pub fn trim_to_depth(node: DirNode, max_depth: u8) -> DirNode {
+    if !node.is_dir || max_depth == 0 {
+        return DirNode { children: Vec::new(), ..node };
+    }
+    let children = node
+        .children
+        .into_iter()
+        .map(|c| trim_to_depth(c, max_depth - 1))
+        .collect();
+    DirNode { children, ..node }
+}
+
 // ── Keep individual helpers for backwards-compat and unit tests ───────────────
 
 pub fn total_size(children: &[DirNode]) -> u64 {
@@ -177,5 +194,61 @@ mod tests {
     fn with_error_sets_error_field() {
         let n = DirNode::new_dir("test", "/test").with_error("Access denied");
         assert_eq!(n.error.as_deref(), Some("Access denied"));
+    }
+
+    // ── trim_to_depth ─────────────────────────────────────────────────────────
+
+    fn deep_tree(depth: u8) -> DirNode {
+        let mut root = DirNode::new_dir("root", "/root");
+        root.size = 1000;
+        if depth > 0 {
+            let child = deep_tree(depth - 1);
+            root.dir_count = 1 + child.dir_count;
+            root.children  = vec![child];
+        }
+        root
+    }
+
+    #[test]
+    fn trim_to_depth_zero_clears_children() {
+        let tree = deep_tree(3);
+        let trimmed = trim_to_depth(tree, 0);
+        assert!(trimmed.children.is_empty(), "depth 0 must clear children");
+        assert_eq!(trimmed.size, 1000, "size must be preserved");
+    }
+
+    #[test]
+    fn trim_to_depth_one_keeps_only_direct_children() {
+        let tree = deep_tree(3);
+        let trimmed = trim_to_depth(tree, 1);
+        assert_eq!(trimmed.children.len(), 1);
+        assert!(trimmed.children[0].children.is_empty(), "grandchildren must be cleared");
+    }
+
+    #[test]
+    fn trim_to_depth_preserves_stats_at_cut_off() {
+        let mut root = DirNode::new_dir("root", "/root");
+        let mut child = DirNode::new_dir("child", "/root/child");
+        child.size       = 500;
+        child.dir_count  = 5;
+        child.file_count = 10;
+        child.children   = vec![file(100)];
+        root.children    = vec![child];
+
+        let trimmed = trim_to_depth(root, 1);
+        let c = &trimmed.children[0];
+        assert_eq!(c.size,       500, "aggregated size preserved");
+        assert_eq!(c.dir_count,  5,   "aggregated dir_count preserved");
+        assert_eq!(c.file_count, 10,  "aggregated file_count preserved");
+        assert!(c.children.is_empty(), "children stripped at cut-off");
+    }
+
+    #[test]
+    fn trim_to_depth_does_not_alter_files() {
+        let mut root = DirNode::new_dir("root", "/root");
+        root.children = vec![file(999)];
+        let trimmed = trim_to_depth(root, 2);
+        assert_eq!(trimmed.children[0].size, 999);
+        assert!(trimmed.children[0].children.is_empty());
     }
 }

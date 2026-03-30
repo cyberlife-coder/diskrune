@@ -1,9 +1,23 @@
 use rayon::prelude::*;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::node::{aggregate, sort_by_size_desc, DirNode};
 
 const ACCESS_DENIED: &str = "Access denied";
+
+// ── Progress counter — updated atomically by every scan() call ────────────────
+static DIRS_SCANNED: AtomicU64 = AtomicU64::new(0);
+
+/// Reset the counter before a new scan.
+pub fn reset_scan_counter() {
+    DIRS_SCANNED.store(0, Ordering::Relaxed);
+}
+
+/// Current number of directories processed (safe to read from any thread).
+pub fn dirs_scanned() -> u64 {
+    DIRS_SCANNED.load(Ordering::Relaxed)
+}
 
 /// Scans a directory tree in parallel and returns the root DirNode.
 ///
@@ -16,6 +30,8 @@ const ACCESS_DENIED: &str = "Access denied";
 /// - **Single-pass stats**: `aggregate()` computes size + dir_count + file_count in
 ///   one fold instead of three separate iterations.
 pub fn scan(root: &Path) -> DirNode {
+    DIRS_SCANNED.fetch_add(1, Ordering::Relaxed);
+
     let name = dir_name(root);
     let path = to_path_string(root);
 
