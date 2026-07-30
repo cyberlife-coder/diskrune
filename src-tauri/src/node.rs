@@ -251,4 +251,41 @@ mod tests {
         assert_eq!(trimmed.children[0].size, 999);
         assert!(trimmed.children[0].children.is_empty());
     }
+
+    // ── Adversarial / security checks ───────────────────────────────────────────
+
+    #[test]
+    fn adversarial_name_and_path_roundtrip_unchanged() {
+        let payloads = [
+            "<img src=x onerror=alert(1)>",
+            "</script><script>alert(1)</script>",
+            "foo' onmouseover='alert(1)'",
+            "bar\" onclick=\"alert(1)\"",
+            "baz &amp; qux",
+            "C:\\Users\\<evil>\\test",
+        ];
+        for payload in payloads {
+            let mut root = DirNode::new_dir(payload, "/root");
+            root.children = vec![DirNode::new_file(payload, "/root/file", 1)];
+            root = root.with_error(payload);
+            let original = root.clone();
+
+            let json = serde_json::to_string(&root).unwrap();
+            let _ = serde_json::from_str::<serde_json::Value>(&json).unwrap(); // valid JSON
+
+            let decoded: DirNode = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, original);
+        }
+    }
+
+    #[test]
+    fn adversarial_names_preserved_by_helpers() {
+        let bad = DirNode::new_dir("<evil>", "/evil");
+        let mut children = vec![bad.clone()];
+        sort_by_size_desc(&mut children);
+        assert_eq!(children[0].name, "<evil>");
+
+        let trimmed = trim_to_depth(bad, 5);
+        assert_eq!(trimmed.name, "<evil>");
+    }
 }
