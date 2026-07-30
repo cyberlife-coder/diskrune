@@ -59,6 +59,18 @@ The installer is generated in `src-tauri/target/release/bundle/`.
 
 ---
 
+## Automated releases
+
+Pushing a tag matching `v*` triggers the `.github/workflows/release.yml` workflow.
+It builds and publishes installers for:
+
+- **Windows** x64 and x86
+- **macOS** x64 (`x86_64-apple-darwin`) and ARM (`aarch64-apple-darwin`)
+
+Each job attaches its bundle (`.msi`, `.exe` or `.dmg`/`.app`) to the same GitHub Release.
+
+---
+
 ## Architecture
 
 ```
