@@ -185,4 +185,38 @@ mod tests {
         let node = scan(tmp.path());
         assert!(!node.name.is_empty());
     }
+
+    #[test]
+    fn scan_preserves_adversarial_but_valid_names() {
+        // Windows forbids \ / : * ? " < > | ; we stay within valid chars while
+        // keeping a malicious-looking payload (' & ; % ( ) { } ! @ # $ ^ etc.).
+        let bad_name = "evil'&%;(){}!@#$%^ .txt";
+        let sub_name = "sub'&%;(){}!@#$%^";
+
+        let tmp = TempDir::new().unwrap();
+        let sub = tmp.path().join(&sub_name);
+        fs::create_dir(&sub).unwrap();
+
+        create_file(tmp.path(), bad_name, 512);
+        create_file(&sub, "nested.txt", 256);
+
+        let root = scan(tmp.path());
+
+        let found_file = root
+            .children
+            .iter()
+            .find(|c| !c.is_dir && c.name == bad_name)
+            .expect("adversarial file name must be preserved");
+        assert_eq!(found_file.size, 512);
+        assert!(found_file.path.contains(bad_name));
+
+        let found_dir = root
+            .children
+            .iter()
+            .find(|c| c.is_dir && c.name == sub_name)
+            .expect("adversarial directory name must be preserved");
+        assert_eq!(found_dir.size, 256);
+        assert_eq!(found_dir.file_count, 1);
+        assert!(found_dir.path.contains(sub_name));
+    }
 }

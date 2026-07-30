@@ -193,7 +193,7 @@ async function loadDrives() {
     const drives = await invoke('list_drives');
     const container = document.getElementById('drives');
     container.innerHTML = drives.map(d =>
-      `<button class="drive-btn" data-path="${d}">${d}</button>`
+      `<button class="drive-btn" data-path="${escapeHtml(d)}">${escapeHtml(d)}</button>`
     ).join('');
     container.querySelectorAll('.drive-btn').forEach(btn => {
       btn.addEventListener('click', () => startScan(btn.dataset.path));
@@ -240,8 +240,8 @@ function updateBreadcrumb(currentPath) {
   el.classList.add('visible');
   el.innerHTML = scanHistory.map((p, i) => {
     const label = p.replace(/.*[\\\/]/, '') || p;
-    return `<span class="bc-item" data-idx="${i}" title="${p}">📁 ${label}</span><span class="bc-sep"> › </span>`;
-  }).join('') + `<span style="color:#c9d1d9">${currentPath.replace(/.*[\\\/]/,'') || currentPath}</span>`;
+    return `<span class="bc-item" data-idx="${i}" title="${escapeHtml(p)}">📁 ${escapeHtml(label)}</span><span class="bc-sep"> › </span>`;
+  }).join('') + `<span style="color:#c9d1d9">${escapeHtml(currentPath.replace(/.*[\\\/]/,'') || currentPath)}</span>`;
   el.querySelectorAll('.bc-item').forEach(bc => {
     bc.addEventListener('click', () => {
       const idx = +bc.dataset.idx;
@@ -279,7 +279,7 @@ function renderSummary(node, elapsedMs) {
   document.getElementById('stat-time' ).textContent = '⏱ '  + (elapsedMs / 1000).toFixed(2) + 's';
   const dirs = (node.children || []).filter(c => c.is_dir).slice(0, 8);
   document.getElementById('summary').innerHTML = dirs.map(c =>
-    `<div class="summary-card"><div class="val">${hs(c.size)}</div><div class="lbl">${c.name} (${pct(c.size, node.size)}%)</div></div>`
+    `<div class="summary-card"><div class="val">${hs(c.size)}</div><div class="lbl">${escapeHtml(c.name)} (${pct(c.size, node.size)}%)</div></div>`
   ).join('');
 }
 
@@ -289,14 +289,17 @@ function renderTopDirs(root) {
     '<h3>🏆 Top 15 — Biggest directories</h3>' +
     all.map(d => {
       const p = pct(d.size, root.size);
-      const esc = d.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      return `<div class="top-item" onclick="goTo('${esc}')">
-        <div class="tp" title="${d.path}">📁 ${d.path}</div>
+      const safePath = escapeHtml(d.path);
+      return `<div class="top-item" data-path="${safePath}">
+        <div class="tp" title="${safePath}">📁 ${safePath}</div>
         <div class="ts">${hs(d.size)}</div>
         <div class="bar-c"><div class="bar-f" style="width:${p}%;background:${bc(+p)}"></div></div>
         <div class="pct">${p}%</div>
       </div>`;
     }).join('');
+  document.querySelectorAll('#top-dirs .top-item').forEach(item => {
+    item.addEventListener('click', () => goTo(item.dataset.path));
+  });
 }
 
 function renderTree(root) {
@@ -333,8 +336,8 @@ function makeNode(node, parentSize) {
 
   row.innerHTML =
     `<span class="tgl">${hasKids ? '▶' : ''}</span>` +
-    `<span class="nm"><span class="ico">${icon(node)}</span><span class="lbl">${node.name}</span>` +
-    (node.error ? `<span class="err-badge">${node.error}</span>` : '') +
+    `<span class="nm"><span class="ico">${icon(node)}</span><span class="lbl">${escapeHtml(node.name)}</span>` +
+    (node.error ? `<span class="err-badge">${escapeHtml(node.error)}</span>` : '') +
     `</span><span class="sz">${hs(node.size)}</span>` +
     `<div class="bar-c"><div class="bar-f" style="width:${p}%;background:${bc(p)}"></div></div>` +
     `<span class="pct">${p}%</span>` +
@@ -377,8 +380,8 @@ function onSearch() {
   ).slice(0, 20);
   if (!matches.length) { el.classList.remove('visible'); return; }
   el.innerHTML = `<div class="sr-count">${matches.length} result(s)</div>` +
-    matches.map(m => `<div class="sr-item" data-path="${m.path}">
-      <span class="sr-path">📁 ${m.path}</span>
+    matches.map(m => `<div class="sr-item" data-path="${escapeHtml(m.path)}">
+      <span class="sr-path">📁 ${escapeHtml(m.path)}</span>
       <span class="sr-size">${hs(m.size)}</span>
     </div>`).join('');
   el.classList.add('visible');
@@ -416,6 +419,16 @@ function goTo(targetPath) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function hs(b) {
   if (b >= 1e12) return (b/1e12).toFixed(1)+' TB';
   if (b >= 1e9)  return (b/1e9 ).toFixed(1)+' GB';
